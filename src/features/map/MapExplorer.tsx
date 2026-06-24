@@ -644,12 +644,12 @@ const MapExplorer: React.FC = () => {
                         <div className="skeleton-line" style={{ height: '0.8rem', width: '50%', borderRadius: '4px' }} />
                       </div>
                       <div className="airport-card-right">
-                        <div className="skeleton-line" style={{ width: '28px', height: '28px', borderRadius: '50%', marginRight: '0.25rem' }} />
+                        <div className="skeleton-line" style={{ width: '28px', height: '28px', borderRadius: '50%', position: 'absolute', top: '1.25rem', right: '1.25rem' }} />
                         <div className="card-badges">
                           <div className="skeleton-line" style={{ width: '35px', height: '18px', borderRadius: '4px' }} />
                           <div className="skeleton-line" style={{ width: '35px', height: '18px', borderRadius: '4px' }} />
                         </div>
-                        <div className="skeleton-line" style={{ width: '60px', height: '14px', borderRadius: '4px' }} />
+                        <div className="skeleton-line" style={{ width: '60px', height: '14px', borderRadius: '4px', marginLeft: 'auto' }} />
                       </div>
                     </div>
                     <div className="airport-card-details" style={{ borderTopColor: 'rgba(0, 0, 0, 0.04)' }}>
