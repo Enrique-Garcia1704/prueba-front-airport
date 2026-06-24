@@ -1,5 +1,5 @@
 import React from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { MoonStar, SunMedium } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 const ThemeToggle: React.FC = () => {
@@ -10,8 +10,9 @@ const ThemeToggle: React.FC = () => {
       onClick={toggleTheme} 
       className="theme-toggle-btn"
       title={theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'}
+      aria-label={theme === 'light' ? 'Activar modo oscuro' : 'Activar modo claro'}
     >
-      {theme === 'light' ? <Moon size={24} /> : <Sun size={24} />}
+      {theme === 'light' ? <MoonStar size={22} /> : <SunMedium size={22} />}
     </button>
   );
 };

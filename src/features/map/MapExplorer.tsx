@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Star, ListFilter, Sparkles, Plane, History, Trash2, BarChart3 } from 'lucide-react';
+import { Star, Tags, TextSearch, PlaneTakeoff, History, Trash2, BarChart3, AlertTriangle, WifiOff } from 'lucide-react';
 
 // Import Data and Components
 import countryData from '../../data/country.json';
@@ -15,7 +15,95 @@ import AirportModal from '../../components/AirportModal';
 import StatsDashboard from '../../components/StatsDashboard';
 import heroImage from '../../assets/imagesavion.jpg';
 
+// Helper to map country names to 2-letter codes
+const getCountryCode = (input: string) => {
+  const trimmed = input.trim().toLowerCase();
+  
+  // Helper to normalize string for comparison (removes accents/diacritics)
+  const normalizeStr = (s: string) => 
+    s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+  const normalizedInput = normalizeStr(trimmed);
+  if (normalizedInput.length === 2) return normalizedInput.toUpperCase();
+  
+  // 1. Exact matches first
+  const foundInGlobalExact = countriesList.find(
+    c => normalizeStr(c.name) === normalizedInput || normalizeStr(c.code) === normalizedInput
+  );
+  if (foundInGlobalExact) return foundInGlobalExact.code.toUpperCase();
+  
+  const foundInLocalExact = countryData.find(
+    (a: any) => a.country_name && normalizeStr(a.country_name) === normalizedInput
+  );
+  if (foundInLocalExact && foundInLocalExact.country) return foundInLocalExact.country.toUpperCase();
+  
+  const common: Record<string, string> = {
+    'mexico': 'MX', 'mex': 'MX',
+    'estados unidos': 'US', 'united states': 'US', 'usa': 'US', 'eeuu': 'US', 'ee.uu.': 'US',
+    'espana': 'ES', 'spain': 'ES',
+    'colombia': 'CO', 'argentina': 'AR', 'chile': 'CL', 'peru': 'PE',
+    'canada': 'CA', 'brazil': 'BR', 'brasil': 'BR',
+    'germany': 'DE', 'deutschland': 'DE', 'france': 'FR', 'uk': 'GB', 'united kingdom': 'GB', 'reino unido': 'GB'
+  };
+  if (common[normalizedInput]) return common[normalizedInput];
+
+  // 2. Prefix matching (minimum 3 characters to avoid false matches)
+  if (normalizedInput.length >= 3) {
+    // Find a country in the global list whose name starts with the input
+    const foundInGlobalPrefix = countriesList.find(
+      c => normalizeStr(c.name).startsWith(normalizedInput)
+    );
+    if (foundInGlobalPrefix) return foundInGlobalPrefix.code.toUpperCase();
+
+    // Find in common dictionary keys starting with the input
+    const matchedCommonKey = Object.keys(common).find(key => key.startsWith(normalizedInput));
+    if (matchedCommonKey) return common[matchedCommonKey];
+  }
+  
+  return trimmed.toUpperCase();
+};
+
+// Helper to get Spanish name for a country code
+const getCountryNameInSpanish = (code: string, fallbackName?: string) => {
+  if (!code) return fallbackName || '';
+  const found = countriesList.find(c => c.code.toUpperCase() === code.toUpperCase());
+  return found ? found.name : (fallbackName || code);
+};
+
+// Helper to map continent names to 2-letter codes
+const getContinentCode = (input: string) => {
+  const trimmed = input.trim().toLowerCase();
+  
+  const normalizeStr = (s: string) => 
+    s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+  const normalizedInput = normalizeStr(trimmed);
+  if (normalizedInput.length === 2) return normalizedInput.toUpperCase();
+  
+  const common: Record<string, string> = {
+    'norteamerica': 'NA', 'north america': 'NA',
+    'sudamerica': 'SA', 'south america': 'SA',
+    'europa': 'EU', 'europe': 'EU',
+    'asia': 'AS',
+    'africa': 'AF',
+    'oceania': 'OC',
+    'antartida': 'AN', 'antarctica': 'AN'
+  };
+  return common[normalizedInput] || trimmed.toUpperCase();
+};
+
 const MapExplorer: React.FC = () => {
+  // Local learned/custom airports state to dynamically grow the local suggestions database
+  const [customAirports, setCustomAirports] = useState<Airport[]>(() => {
+    try {
+      const saved = localStorage.getItem('custom_airports');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
   // Combine all local data sources for initial rendering and Region fallback
   const allAirports = useMemo(() => {
     const rawList = [
@@ -23,18 +111,23 @@ const MapExplorer: React.FC = () => {
       ...(continentData as Airport[]),
       ...(iataData as Airport[]),
       ...(icaoData as Airport[]),
-      ...(majorAirportsList as unknown as Airport[])
+      ...(majorAirportsList as unknown as Airport[]),
+      ...customAirports
     ];
     
     const uniqueMap = new Map<string, Airport>();
     rawList.forEach(a => {
       if (a && a.icao && !uniqueMap.has(a.icao)) {
-        uniqueMap.set(a.icao, a);
+        const translatedCountry = getCountryNameInSpanish(a.country, a.country_name);
+        uniqueMap.set(a.icao, {
+          ...a,
+          country_name: translatedCountry
+        });
       }
     });
     
     return Array.from(uniqueMap.values());
-  }, []);
+  }, [customAirports]);
 
   // Initialize search as completely empty on load
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +197,7 @@ const MapExplorer: React.FC = () => {
     setSearchType(typeUpper);
     setSearchQuery(item.value);
     setHasSearched(true);
-    fetchAirports(item.value, typeUpper);
+    fetchAirports(item.value, typeUpper, true);
   };
 
   const [filteredAirports, setFilteredAirports] = useState<Airport[]>([]);
@@ -112,6 +205,17 @@ const MapExplorer: React.FC = () => {
   const [errorType, setErrorType] = useState<'connection' | 'api' | 'empty' | null>(null);
   const [selectedAirport, setSelectedAirport] = useState<Airport | null>(null);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const shouldScrollRef = useRef(false);
+  const activeRequestRef = useRef<string>('');
+
+  useEffect(() => {
+    if (shouldScrollRef.current && !loading) {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      shouldScrollRef.current = false;
+    }
+  }, [filteredAirports, loading]);
 
   // Local Filters State
   const [localFilterCountry, setLocalFilterCountry] = useState<string>('');
@@ -203,44 +307,9 @@ const MapExplorer: React.FC = () => {
     }
   }, [allAirports, searchType]);
 
-  // Helper to map country names to 2-letter codes
-  const getCountryCode = (input: string) => {
-    const trimmed = input.trim().toLowerCase();
-    if (trimmed.length === 2) return trimmed.toUpperCase();
-    
-    const found = countryData.find(
-      (a: any) => a.country_name && a.country_name.toLowerCase() === trimmed
-    );
-    if (found && found.country) return found.country.toUpperCase();
-    
-    const common: Record<string, string> = {
-      'mexico': 'MX', 'méxico': 'MX',
-      'estados unidos': 'US', 'united states': 'US', 'usa': 'US', 'eeuu': 'US', 'ee.uu.': 'US',
-      'españa': 'ES', 'spain': 'ES',
-      'colombia': 'CO', 'argentina': 'AR', 'chile': 'CL', 'peru': 'PE', 'perú': 'PE',
-      'canada': 'CA', 'canadá': 'CA', 'brazil': 'BR', 'brasil': 'BR'
-    };
-    return common[trimmed] || trimmed.toUpperCase();
-  };
+  // Helpers getCountryCode, getCountryNameInSpanish, getContinentCode moved outside MapExplorer
 
-  // Helper to map continent names to 2-letter codes
-  const getContinentCode = (input: string) => {
-    const trimmed = input.trim().toLowerCase();
-    if (trimmed.length === 2) return trimmed.toUpperCase();
-    
-    const common: Record<string, string> = {
-      'norteamerica': 'NA', 'norteamérica': 'NA', 'north america': 'NA',
-      'sudamerica': 'SA', 'sudamérica': 'SA', 'south america': 'SA',
-      'europa': 'EU', 'europe': 'EU',
-      'asia': 'AS',
-      'africa': 'AF', 'áfrica': 'AF',
-      'oceania': 'OC', 'oceanía': 'OC',
-      'antartida': 'AN', 'antártida': 'AN', 'antarctica': 'AN'
-    };
-    return common[trimmed] || trimmed.toUpperCase();
-  };
-
-  const fetchAirports = async (query: string, type: string) => {
+  const fetchAirports = async (query: string, type: string, triggerScroll = false) => {
     const q = query.trim();
     if (!q) {
       setFilteredAirports([]);
@@ -250,11 +319,20 @@ const MapExplorer: React.FC = () => {
       return;
     }
 
+    const requestKey = `${type}-${q}`;
+    activeRequestRef.current = requestKey;
+
     if (lastFetchedRef.current.query === q && lastFetchedRef.current.type === type) {
+      if (triggerScroll) {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
       return; // Evitar llamadas innecesarias a la API
     }
     
-    lastFetchedRef.current = { query: q, type: type };
+    if (triggerScroll) {
+      shouldScrollRef.current = true;
+    }
+    
     setHasSearched(true);
     setLoading(true);
     setErrorType(null);
@@ -272,32 +350,40 @@ const MapExplorer: React.FC = () => {
       }
       
       let url = '';
+      let filterFn = (a: Airport) => !!a;
       
       switch (type) {
         case 'IATA':
           url = `https://api.api-ninjas.com/v1/airports?iata=${encodeURIComponent(q)}&limit=50`;
+          filterFn = (a: Airport) => a.iata?.toUpperCase() === q.toUpperCase();
           break;
         case 'ICAO':
           url = `https://api.api-ninjas.com/v1/airports?icao=${encodeURIComponent(q)}&limit=50`;
+          filterFn = (a: Airport) => a.icao?.toUpperCase() === q.toUpperCase();
           break;
         case 'COUNTRY': {
           const countryCode = getCountryCode(q);
           url = `https://api.api-ninjas.com/v1/airports?country=${encodeURIComponent(countryCode)}&limit=50`;
+          filterFn = (a: Airport) => a.country?.toUpperCase() === countryCode.toUpperCase();
           break;
         }
         case 'CONTINENT': {
           const continentCode = getContinentCode(q);
           url = `https://api.api-ninjas.com/v1/airports?continent=${encodeURIComponent(continentCode)}&limit=50`;
+          filterFn = (a: Airport) => a.continent?.toUpperCase() === continentCode.toUpperCase();
           break;
         }
         case 'REGION': {
           // Region is filtered locally to prevent premium API error
+          if (activeRequestRef.current !== requestKey) return;
           const cleanQ = q.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
           const matched = allAirports.filter(a => {
             if (!a.region) return false;
             const cleanReg = a.region.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             return cleanReg.includes(cleanQ);
           });
+          
+          if (activeRequestRef.current !== requestKey) return;
           setFilteredAirports(matched);
           if (matched.length === 0) {
             setErrorType('empty');
@@ -316,18 +402,89 @@ const MapExplorer: React.FC = () => {
           }
         });
         
+        if (activeRequestRef.current !== requestKey) return;
+
         if (!response.ok) {
           setErrorType('api');
           setFilteredAirports([]);
-          setLoading(false);
           return;
         }
         
-        const data = await response.json();
+        let data = await response.json();
         
+        if (activeRequestRef.current !== requestKey) return;
+
         if (Array.isArray(data)) {
-          setFilteredAirports(data);
-          if (data.length === 0) {
+          // Normalize and translate country names to Spanish
+          data = data.map((airport: Airport) => ({
+            ...airport,
+            country_name: getCountryNameInSpanish(airport.country, airport.country_name)
+          }));
+
+          // 1. Filtrar los aeropuertos para corregir el error de la API que mezcla países/continentes
+          data = data.filter(filterFn);
+          
+          // 2. Eliminar duplicados y fusionar registros que comparten códigos IATA/ICAO o nombre/ciudad
+          const deduplicated: Airport[] = [];
+          data.forEach((airport: Airport) => {
+            const matchIndex = deduplicated.findIndex(existing => {
+              const matchIata = airport.iata && existing.iata && airport.iata.toUpperCase() === existing.iata.toUpperCase();
+              const matchIcao = airport.icao && existing.icao && airport.icao.toUpperCase() === existing.icao.toUpperCase();
+              const matchNameCity = airport.name && existing.name && 
+                airport.name.toLowerCase().trim() === existing.name.toLowerCase().trim() && 
+                (airport.city || '').toLowerCase().trim() === (existing.city || '').toLowerCase().trim();
+              return matchIata || matchIcao || matchNameCity;
+            });
+
+            if (matchIndex > -1) {
+              const existing = deduplicated[matchIndex];
+              const merged = { ...existing, ...airport };
+              if (!airport.icao && existing.icao) {
+                merged.icao = existing.icao;
+              }
+              if (!airport.iata && existing.iata) {
+                merged.iata = existing.iata;
+              }
+              deduplicated[matchIndex] = merged;
+            } else {
+              deduplicated.push(airport);
+            }
+          });
+          
+          if (activeRequestRef.current !== requestKey) return;
+
+           setFilteredAirports(deduplicated);
+          
+          // 3. Add to custom learned airports so they are recommended in suggestions next time!
+          if (deduplicated.length > 0) {
+            setCustomAirports(prev => {
+              const uniqueMap = new Map<string, Airport>();
+              prev.forEach(a => uniqueMap.set(a.icao, a));
+              
+              let updated = false;
+              deduplicated.forEach(a => {
+                if (a && a.icao && !uniqueMap.has(a.icao)) {
+                  // Check if it's already in the static list to avoid duplicate saving
+                  const isStatic = (countryData as Airport[]).some((c: any) => c.icao === a.icao) ||
+                                  (continentData as Airport[]).some((c: any) => c.icao === a.icao) ||
+                                  (majorAirportsList as unknown as Airport[]).some((c: any) => c.icao === a.icao);
+                  if (!isStatic) {
+                    uniqueMap.set(a.icao, a);
+                    updated = true;
+                  }
+                }
+              });
+              
+              if (updated) {
+                const newList = Array.from(uniqueMap.values());
+                localStorage.setItem('custom_airports', JSON.stringify(newList));
+                return newList;
+              }
+              return prev;
+            });
+          }
+
+          if (deduplicated.length === 0) {
             setErrorType('empty');
           }
         } else {
@@ -336,11 +493,16 @@ const MapExplorer: React.FC = () => {
         }
       }
     } catch (err: any) {
-      console.error('Fetch error:', err);
-      setErrorType('connection');
-      setFilteredAirports([]);
+      if (activeRequestRef.current === requestKey) {
+        console.error('Fetch error:', err);
+        setErrorType('connection');
+        setFilteredAirports([]);
+      }
     } finally {
-      setLoading(false);
+      if (activeRequestRef.current === requestKey) {
+        lastFetchedRef.current = { query: q, type: type };
+        setLoading(false);
+      }
     }
   };
 
@@ -383,7 +545,7 @@ const MapExplorer: React.FC = () => {
               searchType={searchType}
               onSearchTypeChange={setSearchType}
               options={searchOptions}
-              onSearch={(val) => fetchAirports(val, searchType)}
+              onSearch={(val) => fetchAirports(val, searchType, true)}
             />
           </div>
         </div>
@@ -391,7 +553,7 @@ const MapExplorer: React.FC = () => {
 
       {/* Cards Panel or Welcome Screen */}
       {hasSearched ? (
-        <section className="full-screen-panel">
+        <section className="full-screen-panel" ref={resultsRef}>
           <div className="panel-header" style={{ padding: '2rem 2rem 1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2>Resultados de Búsqueda</h2>
@@ -512,31 +674,88 @@ const MapExplorer: React.FC = () => {
               </div>
             </div>
           ) : errorType === 'connection' ? (
-            <div className="error-section">
-              <h3>Error de conexión</h3>
-              <div className="error-box">
-                <p>No fue posible conectarse al servicio.</p>
+            <div className="empty-state" style={{ padding: '3.5rem 2rem' }}>
+              <div className="empty-icon" style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.1)',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1rem'
+              }}>
+                <WifiOff size={28} aria-hidden="true" />
               </div>
+              <h3>Error de conexión</h3>
+              <p style={{
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                maxWidth: '450px',
+                lineHeight: '1.4',
+                margin: '0 auto'
+              }}>
+                No fue posible establecer conexión con el servicio de aeropuertos. Por favor, verifica tu conexión a internet e intenta nuevamente.
+              </p>
             </div>
           ) : errorType === 'api' ? (
-            <div className="error-section">
-              <h3>Error de API</h3>
-              <div className="error-box">
-                <p>Ocurrió un error al consultar la información.</p>
+            <div className="empty-state" style={{ padding: '3.5rem 2rem' }}>
+              <div className="empty-icon" style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(245, 158, 11, 0.1)',
+                color: '#d97706',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1rem'
+              }}>
+                <AlertTriangle size={28} aria-hidden="true" />
               </div>
+              <h3>Error de API</h3>
+              <p style={{
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                maxWidth: '450px',
+                lineHeight: '1.4',
+                margin: '0 auto'
+              }}>
+                Ocurrió un inconveniente al consultar la información de terminales aéreas en el servidor. Intenta de nuevo en unos momentos.
+              </p>
             </div>
           ) : errorType === 'empty' ? (
-            <div className="error-section">
-              <h3>Sin resultados</h3>
-              <div className="error-box">
-                <p>No se encontraron resultados para la búsqueda realizada.</p>
+            <div className="empty-state" style={{ padding: '3.5rem 2rem' }}>
+              <div className="empty-icon" style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(66, 116, 217, 0.1)',
+                color: 'var(--color-accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1rem'
+              }}>
+                <Navigation size={28} style={{ transform: 'rotate(-45deg)' }} aria-hidden="true" />
               </div>
+              <h3>Sin resultados</h3>
+              <p style={{
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                maxWidth: '450px',
+                lineHeight: '1.4',
+                margin: '0 auto'
+              }}>
+                No se encontraron aeropuertos que coincidan con la búsqueda "{searchQuery}". Intenta con otros términos o cambia el criterio de búsqueda.
+              </p>
             </div>
           ) : (
             <div className="airport-grid">
               {displayedAirports.map((airport) => (
                 <AirportCard 
-                  key={airport.icao} 
+                  key={`${airport.icao || ''}-${airport.iata || ''}-${airport.name}`} 
                   airport={airport} 
                   onClick={setSelectedAirport}
                   isFavorite={favorites.some(f => f.icao === airport.icao)}
@@ -558,7 +777,7 @@ const MapExplorer: React.FC = () => {
               <div className="airport-grid" style={{ padding: '1rem 0 2rem 0' }}>
                 {favorites.map((airport) => (
                   <AirportCard 
-                    key={airport.icao} 
+                    key={`${airport.icao || ''}-${airport.iata || ''}-${airport.name}`} 
                     airport={airport} 
                     onClick={setSelectedAirport}
                     isFavorite={true}
@@ -654,21 +873,21 @@ const MapExplorer: React.FC = () => {
             <div className="guides-grid">
               <div className="guide-card">
                 <div className="guide-icon-wrapper">
-                  <ListFilter size={22} aria-hidden="true" />
+                  <Tags size={22} aria-hidden="true" />
                 </div>
                 <h3>Criterio de Búsqueda</h3>
                 <p>Elige entre IATA, ICAO, País, Región o Continente haciendo clic en las pestañas.</p>
               </div>
               <div className="guide-card">
                 <div className="guide-icon-wrapper">
-                  <Sparkles size={20} aria-hidden="true" />
+                  <TextSearch size={22} aria-hidden="true" />
                 </div>
                 <h3>Sugerencias en Vivo</h3>
                 <p>Haz clic en la barra o escribe para filtrar sugerencias globales en tiempo real.</p>
               </div>
               <div className="guide-card">
                 <div className="guide-icon-wrapper">
-                  <Plane size={22} style={{ transform: 'rotate(-45deg)' }} aria-hidden="true" />
+                  <PlaneTakeoff size={22} aria-hidden="true" />
                 </div>
                 <h3>Información de Pistas</h3>
                 <p>Haz clic en cualquier tarjeta de aeropuerto para consultar pistas, altitud, coordenadas y más.</p>
@@ -688,7 +907,11 @@ const MapExplorer: React.FC = () => {
         />
       )}
       {isStatsOpen && (
-        <StatsDashboard airports={displayedAirports} onClose={() => setIsStatsOpen(false)} />
+        <StatsDashboard 
+          displayedAirports={displayedAirports} 
+          allAirports={allAirports} 
+          onClose={() => setIsStatsOpen(false)} 
+        />
       )}
     </div>
   );

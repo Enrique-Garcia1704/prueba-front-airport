@@ -58,15 +58,40 @@ const SearchBar: React.FC<Props> = ({
 
     return options.filter(opt => {
       const optClean = opt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const isMatchDirect = optClean.includes(cleanVal);
       
-      if (searchType === 'CONTINENT') {
-        const continentName = CONTINENT_NAMES[opt] || '';
-        const nameClean = continentName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return isMatchDirect || nameClean.includes(cleanVal);
+      switch (searchType) {
+        case 'IATA': {
+          // Format is: "IATA - Airport Name (City)"
+          // We only match if the IATA code starts with cleanVal
+          const parts = optClean.split(' - ');
+          const iataCode = parts[0].trim();
+          return iataCode.startsWith(cleanVal);
+        }
+        case 'ICAO': {
+          // Format is: "ICAO - Airport Name (City)"
+          // We only match if the ICAO code starts with cleanVal
+          const parts = optClean.split(' - ');
+          const icaoCode = parts[0].trim();
+          return icaoCode.startsWith(cleanVal);
+        }
+        case 'COUNTRY': {
+          // Match if country name starts with or contains cleanVal
+          return optClean.includes(cleanVal);
+        }
+        case 'REGION': {
+          // Match if region name starts with or contains cleanVal
+          return optClean.includes(cleanVal);
+        }
+        case 'CONTINENT': {
+          // Match if continent code starts with cleanVal or name contains cleanVal
+          const code = optClean.trim();
+          const continentName = CONTINENT_NAMES[opt] || '';
+          const nameClean = continentName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          return code.startsWith(cleanVal) || nameClean.includes(cleanVal);
+        }
+        default:
+          return optClean.includes(cleanVal);
       }
-      
-      return isMatchDirect;
     });
   }, [value, options, searchType]);
 
@@ -229,11 +254,18 @@ const SearchBar: React.FC<Props> = ({
                   {opt}
                 </button>
               ))
-            ) : (
-              <div className="suggestion-item" style={{ color: '#9ca3af', cursor: 'default' }}>
-                Sin coincidencias
-              </div>
-            )}
+            ) : value.trim() ? (
+              /* IATA/ICAO: API may have codes not in local data — avoid false "Sin coincidencias" */
+              (searchType === 'IATA' || searchType === 'ICAO') ? (
+                <div className="suggestion-item" style={{ color: '#9ca3af', cursor: 'default', fontStyle: 'italic' }}>
+                  Presiona Enter para buscar &ldquo;{value.trim().toUpperCase()}&rdquo;
+                </div>
+              ) : (
+                <div className="suggestion-item" style={{ color: '#9ca3af', cursor: 'default' }}>
+                  Sin coincidencias
+                </div>
+              )
+            ) : null}
           </div>
         )}
       </form>
