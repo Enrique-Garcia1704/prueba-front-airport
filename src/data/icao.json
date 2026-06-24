@@ -1,0 +1,60 @@
+[
+  {
+    "icao": "MMMX",
+    "ident": "MMMX",
+    "iata": "MEX",
+    "name": "Mexico City Benito Juárez International Airport",
+    "city": "Mexico City",
+    "region": "Ciudad de México",
+    "region_code": "MX-DIF",
+    "country": "MX",
+    "country_name": "Mexico",
+    "continent": "NA",
+    "elevation_ft": 7316,
+    "elevation_m": 2229.9,
+    "latitude": 19.435822,
+    "longitude": -99.07033,
+    "timezone": "America/Mexico_City",
+    "type": "large_airport",
+    "size": "large",
+    "scheduled_service": true,
+    "is_closed": false,
+    "gps_code": "MMMX",
+    "local_code": "ME1",
+    "home_link": "https://www.aicm.com.mx",
+    "wikipedia_link": "https://en.wikipedia.org/wiki/Mexico_City_International_Airport",
+    "keywords": [
+      "AICM",
+      "Ciudad de México"
+    ],
+    "num_runways": 2,
+    "longest_runway_ft": 12966,
+    "runways": [
+      {
+        "length": 12966,
+        "width": 148,
+        "has_lights": true,
+        "surface": "ASP",
+        "surface_category": "paved",
+        "closed": false,
+        "le_ident": "05L",
+        "he_ident": "23R",
+        "le_heading_deg": 59.4,
+        "he_heading_deg": 239.4
+      },
+      {
+        "length": 12795,
+        "width": 148,
+        "has_lights": true,
+        "surface": "ASP",
+        "surface_category": "paved",
+        "closed": false,
+        "le_ident": "05R",
+        "he_ident": "23L",
+        "le_heading_deg": 59.4,
+        "he_heading_deg": 239.4
+      }
+    ],
+    "estimated_annual_passengers": 33907500
+  }
+]
