@@ -137,11 +137,11 @@ const StatsDashboard: React.FC<Props> = ({ airports, onClose }) => {
                       paddingAngle={3}
                       dataKey="value"
                       nameKey="name"
-                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      label={({ name, percent }) => `${name} (${((percent || 0) * 100).toFixed(0)}%)`}
                       labelLine={{stroke: '#94a3b8'}}
                       animationDuration={1000}
                     >
-                      {continentsData.map((entry, index) => (
+                      {continentsData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="transparent" />
                       ))}
                     </Pie>
